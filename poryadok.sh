@@ -712,34 +712,55 @@ cmd_chudo() {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark light" />
 <title>Вечер — Порядок на диске</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Literata:opsz,wght@7..72,400;7..72,500&display=swap" />
 <style>
-  :root { --paper:#f4f0e8; --sheet:#ebe5d9; --ink:#241f18; --muted:#5a534a; --rule:#cfc6b8; --gilt:#8a6a3a; }
-  html,body { margin:0; background:var(--paper); color:var(--ink); font-family:Literata,serif; }
-  main { max-width:40rem; margin:0 auto; padding:3.5rem 1.5rem 5rem; }
-  .kicker { font-family:"Cormorant Garamond",serif; letter-spacing:.14em; text-transform:lowercase; font-variant-caps:small-caps; color:var(--muted); font-size:.95rem; text-align:center; }
-  .hair { height:4px; width:4.5rem; margin:1.5rem auto; border-top:1px solid var(--ink); border-bottom:1px solid var(--ink); opacity:.55; }
-  h1 { font-family:"Cormorant Garamond",serif; font-weight:500; font-size:clamp(2.2rem,5vw,3.2rem); line-height:1.15; margin:0; text-align:center; }
-  p { line-height:1.65; text-wrap:pretty; }
-  .lead { text-align:center; margin:1.5rem 0 0; }
-  .sheet { background:var(--sheet); box-shadow:0 8px 24px -12px rgba(36,31,24,.12); border-radius:.25rem; overflow:hidden; margin:2.5rem 0; }
+  :root {
+    --paper:#110f0d; --sheet:#1a1713; --ink:#ece6d6; --muted:#9a8f7c;
+    --rule:#3d372e; --gilt:#c4a36a; --star:#f3ead6; --halo:rgba(243,234,214,.22);
+  }
+  html[data-lamp="on"] {
+    --paper:#f3efe6; --sheet:#ebe4d6; --ink:#241f18; --muted:#5a534a;
+    --rule:#cfc6b8; --gilt:#8a6a3a; --star:#241f18; --halo:transparent;
+  }
+  html,body {
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family: Palatino, "Palatino Linotype", "Book Antiqua", Georgia, "Times New Roman", serif;
+    transition: background-color .4s ease, color .4s ease;
+  }
+  #lamp {
+    position:fixed; top:1.25rem; right:1.4rem; background:none; border:0;
+    color:var(--muted); letter-spacing:.18em; font: inherit; cursor:pointer;
+    font-variant: small-caps; font-size:.95rem;
+  }
+  #lamp:hover { color:var(--ink); }
+  main { max-width:42rem; margin:0 auto; padding:3.6rem 1.4rem 5.5rem; }
+  .kicker { letter-spacing:.22em; text-transform:lowercase; color:var(--muted); font-size:.95rem; text-align:center; }
+  .hair { height:5px; width:3.2rem; margin:1.5rem auto; border-top:1px solid var(--ink); border-bottom:1px solid var(--ink); opacity:.45; }
+  h1 { font-weight:500; font-size:clamp(2.4rem,6vw,3.4rem); line-height:1.08; margin:0; text-align:center; }
+  p { line-height:1.7; }
+  .lead { text-align:center; margin:1.35rem 0 0; color:var(--muted); letter-spacing:.08em; }
+  .sheet { background:var(--sheet); margin:2.4rem 0 0; overflow:hidden; }
   svg { display:block; width:100%; height:auto; }
-  #idyll { margin:2.5rem 0 0; }
-  #idyll p { margin:0 0 1.15rem; }
-  .muted { color:var(--muted); font-size:.95rem; text-align:center; margin-top:2.5rem; }
+  #caption { margin:0; padding:.85rem 1rem 1.1rem; text-align:center; color:var(--muted); letter-spacing:.12em; font-size:.92rem; min-height:2.6rem; }
+  #idyll { margin:2.6rem 0 0; }
+  #idyll p { margin:0 0 1.2rem; }
+  .muted { color:var(--muted); text-align:center; margin-top:2.6rem; }
 </style>
 </head>
 <body>
+<button id="lamp" type="button">лампа</button>
 <main>
-  <p class="kicker">вечерняя услуга</p>
+  <p class="kicker">вечер</p>
   <div class="hair"></div>
   <h1>Ночная карта</h1>
-  <p class="lead">Папки — созвездия. Файлы — звёзды. Ничего не удалено.</p>
-  <div class="sheet"><svg id="atlas" viewBox="0 0 800 520" role="img" aria-label="Карта диска"></svg></div>
+  <p class="lead">Сегодня вечером.</p>
+  <div class="sheet">
+    <svg id="atlas" viewBox="0 0 800 560" role="img" aria-label="Ночная карта диска"></svg>
+    <p id="caption">наведите — имя звезды</p>
+  </div>
   <div id="idyll"></div>
-  <p class="muted">Спешки нет. Это ваш диск сегодня вечером.</p>
+  <p class="muted">Спешки нет. Это ваш диск.</p>
 </main>
 <script>
 HTML
@@ -747,46 +768,119 @@ HTML
   collect_idyll_js >> "$out"
   cat >> "$out" << 'HTML'
 function hash(s){let h=2166136261;for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);return (h>>>0)/4294967296;}
-function layout(stars,w,h){
-  const names=[...new Set(stars.map(s=>s.constellation))];
-  const cx=w/2,cy=h/2,orbit=Math.min(w,h)*0.32;
-  return stars.map(star=>{
-    const i=Math.max(0,names.indexOf(star.constellation));
-    const base=(i/Math.max(names.length,1))*Math.PI*2-Math.PI/2;
-    const ox=cx+Math.cos(base)*orbit, oy=cy+Math.sin(base)*orbit;
-    const jitter=28+hash(star.name)*54;
-    const a=hash(star.name+star.constellation)*Math.PI*2;
-    return {...star,x:ox+Math.cos(a)*jitter,y:oy+Math.sin(a)*jitter*0.72,r:2.2+Math.log10(Math.max(star.size,10))*1.15};
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
+function mst(nodes,maxLen){
+  if(nodes.length<2) return [];
+  const used=new Set([0]), links=[];
+  while(used.size<nodes.length){
+    let best=Infinity, from=-1, to=-1;
+    for(const i of used){
+      for(let j=0;j<nodes.length;j++){
+        if(used.has(j)) continue;
+        const d=dist(nodes[i],nodes[j]);
+        if(d<best){best=d;from=i;to=j;}
+      }
+    }
+    if(to<0) break;
+    used.add(to);
+    if(best>8 && best<maxLen) links.push({x1:nodes[from].x,y1:nodes[from].y,x2:nodes[to].x,y2:nodes[to].y});
+  }
+  return links;
+}
+function layout(items,w,h){
+  const vis=items.slice(0,240);
+  const names=[...new Set(vis.map(s=>s.constellation))];
+  const cx=w/2, cy=h/2+8, ring=Math.min(w,h)*0.3;
+  const centers=new Map();
+  names.forEach((name,i)=>{
+    const wobble=(hash(name)-0.5)*0.7;
+    const a=-Math.PI/2+(i/Math.max(names.length,1))*Math.PI*2+wobble;
+    const rad=ring*(0.82+hash(name+"r")*0.28);
+    centers.set(name,{x:cx+Math.cos(a)*rad*1.18,y:cy+Math.sin(a)*rad*0.9});
   });
+  const stars=vis.map(star=>{
+    const c=centers.get(star.constellation)||{x:cx,y:cy};
+    const n=vis.filter(s=>s.constellation===star.constellation).length;
+    const spread=18+Math.min(n,14)*3.2;
+    const ang=hash(star.name+star.constellation)*Math.PI*2;
+    const jr=(0.15+hash(star.name+"d")*0.85)*spread;
+    return {...star,x:c.x+Math.cos(ang)*jr,y:c.y+Math.sin(ang)*jr*0.78,r:1.15+Math.log10(Math.max(star.size,10))*1.05};
+  });
+  const links=[];
+  names.forEach(name=>{
+    const group=stars.filter(s=>s.constellation===name).sort((a,b)=>b.size-a.size).slice(0,6);
+    links.push(...mst(group,92));
+  });
+  const labels=names.map(name=>{
+    const group=stars.filter(s=>s.constellation===name);
+    const gx=group.reduce((s,p)=>s+p.x,0)/Math.max(group.length,1);
+    const gy=group.reduce((s,p)=>s+p.y,0)/Math.max(group.length,1);
+    let ox=0, oy=-22, nearest=Infinity;
+    names.forEach(other=>{
+      if(other===name) return;
+      const o=centers.get(other); if(!o) return;
+      const d=dist({x:gx,y:gy},o);
+      if(d<nearest){
+        nearest=d;
+        const ux=gx-o.x, uy=gy-o.y, len=Math.hypot(ux,uy)||1;
+        ox=(ux/len)*16; oy=(uy/len)*16-8;
+      }
+    });
+    return {name,x:gx+ox,y:gy+oy};
+  });
+  const field=[];
+  for(let i=0;i<90;i++){
+    if(hash("keep"+i)<0.22) continue;
+    field.push({x:16+hash("x"+i)*(w-32),y:16+hash("y"+i)*(h-32),r:0.25+hash("r"+i)*0.85});
+  }
+  return {stars,links,labels,field};
 }
 const svg=document.getElementById("atlas");
 const NS="http://www.w3.org/2000/svg";
+const cap=document.getElementById("caption");
 function el(n,a){const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;}
-svg.appendChild(el("rect",{width:800,height:520,fill:"#ebe5d9"}));
-[0.18,0.32,0.46].forEach(t=>svg.appendChild(el("circle",{cx:400,cy:260,r:Math.min(800,520)*t,fill:"none",stroke:"#cfc6b8","stroke-width":"0.6"})));
-const laid=layout(SKY,800,520);
-const by={};
-laid.forEach(s=>{(by[s.constellation]=by[s.constellation]||[]).push(s);});
-Object.values(by).forEach(list=>{
-  list.sort((a,b)=>a.x-b.x);
-  for(let i=0;i<list.length-1;i++){
-    svg.appendChild(el("line",{x1:list[i].x,y1:list[i].y,x2:list[i+1].x,y2:list[i+1].y,stroke:"rgba(138,106,58,.5)","stroke-width":"0.8"}));
-  }
-});
-laid.forEach(s=>{
-  const c=el("circle",{cx:s.x,cy:s.y,r:s.r,fill:"#241f18"});
-  const t=document.createElementNS(NS,"title");
-  t.textContent=s.name+" · "+s.constellation;
-  c.appendChild(t);
-  svg.appendChild(c);
-});
-Object.entries(by).forEach(([name,list])=>{
-  const x=list.reduce((a,s)=>a+s.x,0)/list.length;
-  const y=list.reduce((a,s)=>a+s.y,0)/list.length;
-  const tx=el("text",{x,y:y-18,"text-anchor":"middle",fill:"#8a6a3a","font-family":"Cormorant Garamond, serif","font-size":"15","letter-spacing":"0.12em"});
-  tx.textContent=name.toLowerCase();
-  svg.appendChild(tx);
-});
+function css(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim();}
+function paint(){
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  const sheet=css("--sheet")||"#1a1713";
+  const rule=css("--rule")||"#3d372e";
+  const gilt=css("--gilt")||"#c4a36a";
+  const star=css("--star")||"#f3ead6";
+  const halo=css("--halo")||"rgba(243,234,214,.22)";
+  svg.appendChild(el("rect",{width:800,height:560,fill:sheet}));
+  const e1=el("ellipse",{cx:400,cy:280,rx:310,ry:214,fill:"none",stroke:rule,"stroke-width":"0.5",opacity:"0.55"});
+  e1.setAttribute("transform","rotate(-9 400 280)");
+  svg.appendChild(e1);
+  const e2=el("ellipse",{cx:400,cy:280,rx:210,ry:148,fill:"none",stroke:rule,"stroke-width":"0.45",opacity:"0.4"});
+  e2.setAttribute("transform","rotate(14 400 280)");
+  svg.appendChild(e2);
+  const laid=layout(SKY,800,560);
+  laid.field.forEach(s=>svg.appendChild(el("circle",{cx:s.x,cy:s.y,r:s.r,fill:gilt,opacity:"0.28"})));
+  laid.links.forEach(l=>svg.appendChild(el("line",{x1:l.x1,y1:l.y1,x2:l.x2,y2:l.y2,stroke:gilt,"stroke-width":"0.7",opacity:"0.55"})));
+  laid.stars.forEach(s=>{
+    const g=el("g",{});
+    g.appendChild(el("circle",{cx:s.x,cy:s.y,r:s.r*2.4,fill:halo}));
+    g.appendChild(el("circle",{cx:s.x,cy:s.y,r:s.r,fill:star}));
+    g.addEventListener("mouseenter",()=>{cap.textContent=s.name+" · "+s.constellation.toLowerCase();});
+    svg.appendChild(g);
+  });
+  svg.addEventListener("mouseleave",()=>{cap.textContent="наведите — имя звезды";});
+  laid.labels.forEach(l=>{
+    const tx=el("text",{x:l.x,y:l.y,"text-anchor":"middle",fill:gilt,"font-family":"Palatino, Georgia, serif","font-size":"13","letter-spacing":"0.22em"});
+    tx.textContent=l.name.toLowerCase();
+    svg.appendChild(tx);
+  });
+}
+paint();
+const lamp=document.getElementById("lamp");
+function applyLamp(on){
+  document.documentElement.setAttribute("data-lamp", on ? "on" : "off");
+  lamp.textContent = on ? "погасить" : "лампа";
+  try { localStorage.setItem("poryadok-lamp", on ? "on" : "off"); } catch(e) {}
+  paint();
+}
+try { if (localStorage.getItem("poryadok-lamp")==="on") applyLamp(true); } catch(e) {}
+lamp.addEventListener("click",()=>applyLamp(document.documentElement.getAttribute("data-lamp")!=="on"));
 const box=document.getElementById("idyll");
 if(typeof IDYLL==="string" && IDYLL.trim()){
   IDYLL.trim().split(/\n{2,}/).forEach(chunk=>{
