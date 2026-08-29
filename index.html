@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Порядок на диске</title>
+  <meta name="description" content="Вечерняя услуга. Отчёт о диске, разбор папок, запасная копия. Без спешки и без удаления на всякий случай." />
+  <meta name="theme-color" content="#F4F0E8" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,500;0,7..72,600;1,7..72,400&display=swap" />
+  <style>
+    :root {
+      --paper: #f4f0e8;
+      --sheet: #ebe5d9;
+      --ink: #241f18;
+      --muted: #5a534a;
+      --rule: #cfc6b8;
+      --font-display: "Cormorant Garamond", "Noto Serif", "Times New Roman", serif;
+      --font-serif: "Literata", "Noto Serif", "Times New Roman", serif;
+      --text-display: clamp(2.35rem, 1.6rem + 3.2vw, 3.35rem);
+      --text-title: clamp(1.55rem, 1.25rem + 1.2vw, 1.95rem);
+      --text-lede: clamp(1.28rem, 1.18rem + 0.45vw, 1.42rem);
+      --text-body: clamp(1.0625rem, 1rem + 0.25vw, 1.1875rem);
+      --text-small: clamp(0.9375rem, 0.9rem + 0.15vw, 1.02rem);
+      --text-mark: clamp(1.7rem, 1.5rem + 0.8vw, 2rem);
+      --leading-tight: 1.15;
+      --leading-snug: 1.3;
+      --leading-body: 1.65;
+      --tracking-display: -0.01em;
+      --shadow-sheet:
+        0 0 0 1px color-mix(in oklab, var(--ink) 8%, transparent),
+        0 1px 2px -1px color-mix(in oklab, var(--ink) 6%, transparent),
+        0 8px 24px -12px color-mix(in oklab, var(--ink) 10%, transparent);
+      --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+      --motion-quick: 150ms;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      background: var(--paper);
+      color: var(--ink);
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      html { scroll-behavior: smooth; }
+    }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--font-serif);
+      font-size: var(--text-body);
+      line-height: var(--leading-body);
+      font-optical-sizing: auto;
+    }
+
+    ::selection {
+      background: var(--ink);
+      color: var(--paper);
+    }
+
+    button:not(:disabled) { cursor: pointer; }
+
+    h1, h2, h3 {
+      text-wrap: balance;
+      font-family: var(--font-display);
+      font-optical-sizing: auto;
+      font-weight: 500;
+      margin: 0;
+    }
+
+    p { text-wrap: pretty; margin: 0; }
+
+    main {
+      margin: 0 auto;
+      min-height: 100dvh;
+      width: 100%;
+      max-width: 36rem;
+      padding: 4rem 1.5rem;
+    }
+
+    @media (min-width: 640px) {
+      main { padding: 6rem 2rem; }
+    }
+
+    header.masthead { text-align: center; }
+    header.masthead > * + * { margin-top: 2rem; }
+
+    .kicker {
+      font-family: var(--font-display);
+      font-size: var(--text-small);
+      letter-spacing: 0.14em;
+      text-transform: lowercase;
+      font-variant-caps: small-caps;
+      color: var(--muted);
+    }
+
+    .hairline {
+      height: 1px;
+      width: 100%;
+      background: var(--rule);
+      border: 0;
+      margin: 4rem 0;
+    }
+
+    .hairline-double {
+      height: 4px;
+      width: 4.5rem;
+      margin-inline: auto;
+      border-top: 1px solid var(--ink);
+      border-bottom: 1px solid var(--ink);
+      opacity: 0.55;
+    }
+
+    h1 {
+      font-size: var(--text-display);
+      letter-spacing: var(--tracking-display);
+      line-height: var(--leading-tight);
+    }
+
+    h2 {
+      font-size: var(--text-title);
+      line-height: var(--leading-snug);
+    }
+
+    .lede {
+      font-family: var(--font-display);
+      font-size: var(--text-lede);
+      line-height: var(--leading-snug);
+    }
+
+    .italic { font-style: italic; }
+    .muted { color: var(--muted); }
+    .small { font-size: var(--text-small); }
+
+    .stack-open { margin-top: 4rem; }
+    .stack-open > * + * { margin-top: 1.75rem; }
+
+    section > * + * { margin-top: 2rem; }
+    section header > * + * { margin-top: 0.75rem; }
+    .prose > * + * { margin-top: 1.5rem; }
+
+    ol.services {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    ol.services > li + li { margin-top: 3rem; }
+    .service { display: flex; gap: 1.25rem; }
+    .service-n {
+      font-family: var(--font-display);
+      font-size: var(--text-mark);
+      color: var(--muted);
+      margin-top: 0.125rem;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    .service-body { min-width: 0; }
+    .service-body > * + * { margin-top: 1rem; }
+    .service-body h3 {
+      font-size: var(--text-lede);
+      line-height: var(--leading-snug);
+      font-weight: 400;
+    }
+    .service-copy > * + * { margin-top: 0.75rem; }
+
+    blockquote {
+      margin: 0;
+      border-left: 1px solid var(--rule);
+      padding-left: 1.25rem;
+      font-size: var(--text-small);
+    }
+    blockquote > * + * { margin-top: 1rem; }
+
+    form > * + * { margin-top: 2.5rem; }
+    .field > * + * { margin-top: 0.75rem; }
+    label.lede, legend.lede { display: block; }
+
+    input[type="text"],
+    textarea {
+      width: 100%;
+      border: 0;
+      border-bottom: 1px solid var(--rule);
+      border-radius: 0;
+      background: transparent;
+      padding: 0.5rem 0;
+      color: var(--ink);
+      font-family: inherit;
+      font-size: var(--text-body);
+      outline: none;
+    }
+    textarea {
+      min-height: 8rem;
+      resize: vertical;
+      padding-top: 0.75rem;
+      padding-bottom: 0.75rem;
+      line-height: var(--leading-body);
+    }
+    textarea.short { min-height: 6rem; }
+    input:focus-visible,
+    textarea:focus-visible { border-color: var(--ink); }
+
+    fieldset { border: 0; padding: 0; margin: 0; }
+    fieldset > * + * { margin-top: 1rem; }
+    .checks { list-style: none; padding: 0; margin: 0; }
+    .checks li + li { margin-top: 0.25rem; }
+    .checks label {
+      display: flex;
+      min-height: 2.75rem;
+      cursor: pointer;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.5rem 0;
+    }
+    .checks input {
+      margin-top: 0.375rem;
+      width: 1rem;
+      height: 1rem;
+      flex-shrink: 0;
+      accent-color: var(--ink);
+    }
+
+    #folders-field { display: none; }
+    #folders-field.is-open { display: block; }
+
+    pre#letter-preview {
+      white-space: pre-wrap;
+      font-family: var(--font-serif);
+      font-size: var(--text-body);
+      line-height: var(--leading-body);
+      color: var(--ink);
+      background: var(--sheet);
+      box-shadow: var(--shadow-sheet);
+      border-radius: 0.25rem;
+      padding: 1.5rem 1.25rem;
+      margin: 0;
+    }
+
+    .letter-copy {
+      display: inline-flex;
+      min-height: 2.75rem;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      border-radius: 0.125rem;
+      background: var(--ink);
+      color: var(--paper);
+      font-family: var(--font-display);
+      font-size: var(--text-lede);
+      line-height: 1;
+      padding: 0.75rem 1.5rem;
+      transition: opacity var(--motion-quick) var(--ease-out), transform var(--motion-quick) var(--ease-out);
+    }
+    .letter-copy:hover { opacity: 0.9; }
+    .letter-copy:active { transform: scale(0.98); }
+    .letter-copy:focus-visible {
+      outline: 2px solid var(--ink);
+      outline-offset: 4px;
+    }
+
+    footer {
+      margin-top: 5rem;
+      text-align: center;
+    }
+    footer > * + * { margin-top: 1rem; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .letter-copy:active { transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="masthead">
+      <p class="kicker">вечерняя услуга</p>
+      <div class="hairline-double"></div>
+      <h1>Порядок на диске</h1>
+    </header>
+
+    <div class="stack-open">
+      <p>Компьютер копится.</p>
+      <p>Папки путаются. Загрузки живут своей жизнью. На рабочем столе лежит то, что «потом».</p>
+      <p>Это не срочное дело.</p>
+      <p>Это порядок — когда человек сам готов.</p>
+      <p class="lede italic">С чувством, с толком, с расстановкой.</p>
+    </div>
+
+    <hr class="hairline" />
+
+    <section>
+      <header>
+        <p class="kicker">не больше</p>
+        <h2>Три дела</h2>
+      </header>
+      <ol class="services">
+        <li class="service">
+          <span class="service-n" aria-hidden="true">1</span>
+          <div class="service-body">
+            <h3>Отчёт о диске</h3>
+            <p class="muted">120 белорусских, или 4000 российских.</p>
+            <div class="service-copy">
+              <p>Только список: место, давность, повторы.</p>
+              <p>Без удаления.</p>
+            </div>
+          </div>
+        </li>
+        <li class="service">
+          <span class="service-n" aria-hidden="true">2</span>
+          <div class="service-body">
+            <h3>Разбор «Загрузок» и «Рабочего стола»</h3>
+            <p class="muted">150 белорусских, или 5000 российских.</p>
+            <div class="service-copy">
+              <p>Сначала план, который человек утверждает.</p>
+            </div>
+          </div>
+        </li>
+        <li class="service">
+          <span class="service-n" aria-hidden="true">3</span>
+          <div class="service-body">
+            <h3>Запасная копия указанных папок</h3>
+            <p class="muted">150 белорусских, или 5000 российских.</p>
+            <div class="service-copy">
+              <p>Ясно, куда копируем.</p>
+            </div>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <hr class="hairline" />
+
+    <section>
+      <header>
+        <p class="kicker">честно</p>
+        <h2>Чего не будет</h2>
+      </header>
+      <div class="prose">
+        <p>Не будет «сегодня или никогда».</p>
+        <p>Не будет удаления на всякий случай.</p>
+        <p>Не будет программы, которая решает за человека.</p>
+        <p>Не будет подписки.</p>
+        <p>Не будет работы вслепую с чужими письмами и семейными снимками.</p>
+        <p>Если дело не моё — отказ без платы.</p>
+      </div>
+    </section>
+
+    <hr class="hairline" />
+
+    <section>
+      <header>
+        <p class="kicker">обыкновенно</p>
+        <h2>Ход работы</h2>
+      </header>
+      <div class="prose">
+        <p>Вы пишете, что мешает.</p>
+        <p>Я отвечаю: берусь ли, и в какой срок.</p>
+        <p>Обыкновенно два–пять вечеров.</p>
+        <p>Сначала отчёт или план.</p>
+        <p>Ночь на размышление — это нормально.</p>
+        <p>Трогать файлы — только после ясных слов «согласен».</p>
+      </div>
+    </section>
+
+    <hr class="hairline" />
+
+    <section>
+      <header>
+        <p class="kicker">не подвиг</p>
+        <h2>Образец отчёта</h2>
+      </header>
+      <div class="prose">
+        <p>Домашняя картина.</p>
+        <blockquote>
+          <p>Рабочий стол — 38 файлов. Трое лежат с осени.</p>
+          <p>Загрузки — 2,1 Гб. Половина — установщики, которые уже стоят.</p>
+          <p>Документы — два одинаковых архива «скан».</p>
+          <p>Музыка — порядок. Повторов нет.</p>
+        </blockquote>
+      </div>
+    </section>
+
+    <hr class="hairline" />
+
+    <section>
+      <header>
+        <p class="kicker">когда сами захотите</p>
+        <h2>Письмо</h2>
+      </header>
+      <div class="prose">
+        <p>Эта форма ничего не захватывает и никуда не отправляет.</p>
+        <p>Она собирает вежливое письмо.</p>
+        <p>Скопируете и пошлёте сами — когда захотите.</p>
+        <p>В письме уже стоит условие про согласие. И фраза: спешки нет.</p>
+      </div>
+
+      <form id="letter-form" style="margin-top: 2.5rem;">
+        <div class="field">
+          <label class="lede" for="name">Как к вам обращаться</label>
+          <p class="small muted">Не обязательно.</p>
+          <input id="name" type="text" autocomplete="name" />
+        </div>
+
+        <div class="field">
+          <label class="lede" for="bother">Что мешает</label>
+          <p class="small muted">Как есть. Можно коротко.</p>
+          <textarea id="bother" rows="5"></textarea>
+        </div>
+
+        <fieldset>
+          <legend class="lede">О каком деле речь</legend>
+          <p class="small muted">Можно не выбирать. Можно выбрать несколько.</p>
+          <ul class="checks">
+            <li>
+              <label>
+                <input type="checkbox" name="service" value="report" />
+                <span>Отчёт о диске</span>
+              </label>
+            </li>
+            <li>
+              <label>
+                <input type="checkbox" name="service" value="tidy" />
+                <span>Разбор «Загрузок» и «Рабочего стола»</span>
+              </label>
+            </li>
+            <li>
+              <label>
+                <input type="checkbox" name="service" value="copy" />
+                <span>Запасная копия указанных папок</span>
+              </label>
+            </li>
+          </ul>
+        </fieldset>
+
+        <div class="field" id="folders-field">
+          <label class="lede" for="folders">Какие папки копировать</label>
+          <p class="small muted">Если уже знаете. Если нет — оставьте пустым.</p>
+          <textarea id="folders" class="short" rows="3"></textarea>
+        </div>
+
+        <div class="field">
+          <p class="kicker">Так будет выглядеть письмо</p>
+          <pre id="letter-preview"></pre>
+        </div>
+
+        <div class="field">
+          <button type="submit" class="letter-copy">Скопировать письмо</button>
+          <p class="small muted" id="copy-status" aria-live="polite">Никуда само не уйдёт.</p>
+        </div>
+      </form>
+    </section>
+
+    <footer>
+      <div class="hairline-double"></div>
+      <p class="lede">Порядок на диске</p>
+      <p class="small muted">Вечерняя услуга. Спешки нет.</p>
+    </footer>
+  </main>
+
+  <script>
+    const SERVICES = {
+      report: "Прошу отчёт о диске: место, давность, повторы. Без удаления.",
+      tidy: "Прошу разбор «Загрузок» и «Рабочего стола». Сначала план, который я утверждаю.",
+      copy: "Прошу запасную копию указанных папок. Хочу ясно знать, куда копируем.",
+    };
+
+    const form = document.getElementById("letter-form");
+    const nameInput = document.getElementById("name");
+    const botherInput = document.getElementById("bother");
+    const foldersInput = document.getElementById("folders");
+    const foldersField = document.getElementById("folders-field");
+    const preview = document.getElementById("letter-preview");
+    const status = document.getElementById("copy-status");
+    const serviceBoxes = [...form.querySelectorAll('input[name="service"]')];
+
+    function selectedServices() {
+      return serviceBoxes.filter((box) => box.checked).map((box) => box.value);
+    }
+
+    function composeLetter() {
+      const parts = ["Здравствуйте."];
+      const name = nameInput.value.trim();
+      if (name) parts.push("Меня зовут " + name + ".");
+
+      const bother = botherInput.value.trim();
+      if (bother) {
+        parts.push("Мешает вот что.");
+        parts.push(bother);
+      }
+
+      const chosen = selectedServices();
+      for (const id of chosen) {
+        if (SERVICES[id]) parts.push(SERVICES[id]);
+      }
+
+      const folders = foldersInput.value.trim();
+      if (chosen.includes("copy") && folders) {
+        parts.push("Папки, о которых речь:\n" + folders);
+      }
+
+      parts.push("Спешки нет.");
+      parts.push("Файлы трогать — только после моих ясных слов «согласен».");
+      parts.push("Ночь на размышление — это нормально.");
+      parts.push("Ответьте, пожалуйста: берётесь ли и в какой срок.");
+      return parts.join("\n\n");
+    }
+
+    function render() {
+      const chosen = selectedServices();
+      foldersField.classList.toggle("is-open", chosen.includes("copy"));
+      preview.textContent = composeLetter();
+    }
+
+    async function writeClipboard(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (_) {
+        try {
+          const area = document.createElement("textarea");
+          area.value = text;
+          area.setAttribute("readonly", "");
+          area.setAttribute("aria-hidden", "true");
+          area.tabIndex = -1;
+          area.style.position = "fixed";
+          area.style.top = "0";
+          area.style.left = "0";
+          area.style.opacity = "0";
+          document.body.appendChild(area);
+          area.select();
+          const ok = document.execCommand("copy");
+          area.remove();
+          return ok;
+        } catch (_) {
+          return false;
+        }
+      }
+    }
+
+    function selectPreview() {
+      const range = document.createRange();
+      range.selectNodeContents(preview);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    form.addEventListener("input", render);
+    form.addEventListener("change", render);
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const letter = composeLetter();
+      const ok = await writeClipboard(letter);
+      if (ok) {
+        status.textContent = "Письмо в буфере. Отправите, когда сами захотите.";
+      } else {
+        status.textContent = "Скопировать не вышло. Выделите письмо выше и скопируйте сами.";
+        selectPreview();
+      }
+    });
+
+    render();
+  </script>
+</body>
+</html>
