@@ -263,6 +263,35 @@
       outline-offset: 4px;
     }
 
+    .letter-copy:disabled { opacity: 0.4; cursor: default; }
+
+    .letter-quiet {
+      display: inline-flex;
+      min-height: 2.75rem;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--ink);
+      border-radius: 0.125rem;
+      background: transparent;
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: var(--text-lede);
+      line-height: 1;
+      padding: 0.75rem 1.5rem;
+      transition: opacity var(--motion-quick) var(--ease-out), transform var(--motion-quick) var(--ease-out);
+    }
+    .letter-quiet:hover { opacity: 0.72; }
+    .letter-quiet:active { transform: scale(0.98); }
+    .letter-quiet:focus-visible {
+      outline: 2px solid var(--ink);
+      outline-offset: 4px;
+    }
+
+    .work-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 0.75rem; }
+    .work-list { list-style: none; padding: 0; margin: 0; font-size: var(--text-small); }
+    .work-list li + li { margin-top: 0.5rem; }
+    #work-dir { display: none; }
+
     footer {
       margin-top: 5rem;
       text-align: center;
@@ -382,6 +411,26 @@
           <p>Музыка — порядок. Повторов нет.</p>
         </blockquote>
       </div>
+    </section>
+
+    <hr class="hairline" />
+
+    <section>
+      <header>
+        <p class="kicker">за этим столом</p>
+        <h2>Вечерняя работа</h2>
+      </header>
+      <div class="prose">
+        <p>Вы выбираете папку на этом компьютере. В сеть она не уходит.</p>
+        <p>Сначала отчёт или план. Трогать файлы — только после ясных слов «согласен».</p>
+      </div>
+      <div class="work-actions" style="margin-top: 2rem;">
+        <button type="button" class="letter-copy" id="work-report">Составить отчёт</button>
+        <button type="button" class="letter-quiet" id="work-tidy">Составить план разбора</button>
+        <button type="button" class="letter-quiet" id="work-copy">Запасная копия</button>
+      </div>
+      <input id="work-dir" type="file" multiple webkitdirectory directory />
+      <div id="work-stage" class="prose" style="margin-top: 2rem;"></div>
     </section>
 
     <hr class="hairline" />
@@ -564,6 +613,382 @@
     });
 
     render();
+  </script>
+  <script>
+    const SCAN_LIMIT = 8000;
+    const SKIP_DIRS = new Set(["node_modules", ".git", ".svn", "$recycle.bin", "system volume information", "windows", "appdata"]);
+    const REFUSE_NAMES = ["почта", "mail", "mails", "outlook", "thunderbird", "pictures", "picture", "фото", "фотографии", "photos", "photo", "dcim", "icloud", "icloud photos", "семейные снимки", "camera roll"];
+    const MAIL_EXT = new Set(["pst", "ost", "eml", "msg", "mbox"]);
+    const PHOTO_LIB_EXT = new Set(["heic", "nef", "cr2", "arw", "dng"]);
+    const KIND_FOLDER = { installer: "Установщики", image: "Картинки", document: "Документы", archive: "Архивы", video: "Видео", audio: "Музыка" };
+
+    function extensionOf(name) {
+      const base = name.split(/[\\/]/).pop() || name;
+      const i = base.lastIndexOf(".");
+      if (i <= 0 || i === base.length - 1) return "";
+      return base.slice(i + 1).toLowerCase();
+    }
+    function kindOf(ext) {
+      if (["exe", "msi", "msix", "dmg", "pkg", "deb", "rpm", "apk"].includes(ext)) return "installer";
+      if (["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "heic", "tif", "tiff"].includes(ext)) return "image";
+      if (["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "rtf", "odt"].includes(ext)) return "document";
+      if (["zip", "rar", "7z", "tar", "gz", "iso"].includes(ext)) return "archive";
+      if (["mp4", "mkv", "avi", "mov", "wmv", "webm"].includes(ext)) return "video";
+      if (["mp3", "wav", "flac", "aac", "ogg", "m4a"].includes(ext)) return "audio";
+      if (MAIL_EXT.has(ext)) return "mail";
+      return "other";
+    }
+    function shouldSkipDir(name) { return SKIP_DIRS.has(name.trim().toLowerCase()); }
+    function looksPrivateName(name) {
+      const n = name.trim().toLowerCase();
+      return REFUSE_NAMES.some((item) => n === item || n.includes(item));
+    }
+    function refuseScan(folder, files) {
+      if (looksPrivateName(folder)) return "Это похоже на письма или семейные снимки. Вслепую не беру. Отказ без платы.";
+      if (files.length === 0) return null;
+      const mail = files.filter((f) => kindOf(f.ext) === "mail").length;
+      const raw = files.filter((f) => PHOTO_LIB_EXT.has(f.ext)).length;
+      if (mail / files.length >= 0.08) return "Здесь много писем. Вслепую не беру. Отказ без платы.";
+      if (raw / files.length >= 0.25 && files.length >= 40) return "Это похоже на семейные снимки. Вслепую не беру. Отказ без платы.";
+      return null;
+    }
+    function plural(n, one, few, many) {
+      const abs = Math.abs(n) % 100;
+      const last = abs % 10;
+      if (abs > 10 && abs < 20) return many;
+      if (last === 1) return one;
+      if (last >= 2 && last <= 4) return few;
+      return many;
+    }
+    function formatNum(n) {
+      const rounded = n >= 10 ? Math.round(n) : Math.round(n * 10) / 10;
+      return String(rounded).replace(".", ",");
+    }
+    function formatSize(bytes) {
+      if (bytes < 1024) return bytes + " байт";
+      const kb = bytes / 1024;
+      if (kb < 1024) return formatNum(kb) + " Кб";
+      const mb = kb / 1024;
+      if (mb < 1024) return formatNum(mb) + " Мб";
+      return formatNum(mb / 1024) + " Гб";
+    }
+    function seasonOf(mtime, now) {
+      const date = new Date(mtime);
+      const month = date.getMonth();
+      const season = month === 11 || month <= 1 ? "зимы" : month <= 4 ? "весны" : month <= 7 ? "лета" : "осени";
+      if (date.getFullYear() < new Date(now).getFullYear()) return season + " " + date.getFullYear();
+      return season;
+    }
+    function isTopLevel(path) { return !path.includes("/") && !path.includes("\\"); }
+    function findRepeats(files) {
+      const byKey = new Map();
+      for (const file of files) {
+        const key = file.name.toLowerCase() + "::" + file.size;
+        const list = byKey.get(key) || [];
+        list.push(file);
+        byKey.set(key, list);
+      }
+      const names = [];
+      for (const [key, list] of byKey) if (list.length >= 2) names.push(key.split("::")[0]);
+      return names.sort((a, b) => a.localeCompare(b, "ru"));
+    }
+    function composeReport(folder, files, truncated, now) {
+      now = now || Date.now();
+      const lines = [];
+      const total = files.reduce((s, f) => s + f.size, 0);
+      lines.push("«" + folder + "» — " + files.length + " " + plural(files.length, "файл", "файла", "файлов") + ". " + formatSize(total) + ".");
+      const old = files.filter((f) => now - f.mtime > 90 * 24 * 60 * 60 * 1000);
+      if (old.length > 0) {
+        const oldest = [...old].sort((a, b) => a.mtime - b.mtime)[0];
+        lines.push(old.length + " " + plural(old.length, "лежит", "лежат", "лежат") + " с " + seasonOf(oldest.mtime, now) + ".");
+      } else lines.push("Давних почти нет.");
+      const repeats = findRepeats(files);
+      if (repeats.length > 0) {
+        const shown = repeats.slice(0, 2).map((n) => "«" + n + "»");
+        const extra = repeats.length > 2 ? " и ещё " + (repeats.length - 2) : "";
+        lines.push("Повторы: " + shown.join(", ") + extra + ".");
+      } else lines.push("Повторов по имени и размеру нет.");
+      const top = files.filter((f) => isTopLevel(f.path));
+      const installers = top.filter((f) => kindOf(f.ext) === "installer");
+      if (installers.length > 0) lines.push("На виду " + installers.length + " " + plural(installers.length, "установщик", "установщика", "установщиков") + ".");
+      else if (top.length > 0) lines.push("Наверху " + top.length + " " + plural(top.length, "файл", "файла", "файлов") + " россыпью.");
+      else lines.push("Наверху пусто. Папки внутри — своим ходом.");
+      if (truncated) lines.push("Список неполный: папка очень большая. Этого довольно для картины.");
+      return lines.slice(0, 6);
+    }
+    function composeTidyPlan(files) {
+      const top = files.filter((f) => isTopLevel(f.path));
+      const moves = [];
+      const left = [];
+      const skipped = [];
+      for (const file of top) {
+        const kind = kindOf(file.ext);
+        if (kind === "mail") { skipped.push(file); continue; }
+        if (kind === "other" || !file.ext) { left.push(file); continue; }
+        const folder = KIND_FOLDER[kind];
+        moves.push({ from: file.name, to: folder + "/" + file.name, folder });
+      }
+      const lines = [];
+      if (moves.length === 0) lines.push("Наверху нечего раскладывать. Можно оставить как есть.");
+      else {
+        const byFolder = new Map();
+        for (const move of moves) byFolder.set(move.folder, (byFolder.get(move.folder) || 0) + 1);
+        for (const [folder, count] of byFolder) lines.push("В «" + folder + "» — " + count + " " + plural(count, "файл", "файла", "файлов") + ".");
+        lines.push("Это план. Файлы ещё на месте.");
+      }
+      if (left.length > 0) lines.push("Неясных оставляю на месте: " + left.length + " " + plural(left.length, "файл", "файла", "файлов") + ".");
+      if (skipped.length > 0) lines.push("Письма не трогаю.");
+      return { moves, lines };
+    }
+    function isConsent(text) { return text.trim().toLowerCase() === "согласен"; }
+    function canWriteFolders() { return typeof window.showDirectoryPicker === "function"; }
+
+    async function walkHandle(root) {
+      const files = [];
+      let truncated = false;
+      async function visit(dir, prefix) {
+        if (files.length >= SCAN_LIMIT) { truncated = true; return; }
+        for await (const entry of dir.values()) {
+          if (files.length >= SCAN_LIMIT) { truncated = true; return; }
+          if (entry.kind === "directory") {
+            if (shouldSkipDir(entry.name)) continue;
+            await visit(entry, prefix ? prefix + "/" + entry.name : entry.name);
+            continue;
+          }
+          const file = await entry.getFile();
+          const path = prefix ? prefix + "/" + file.name : file.name;
+          files.push({ path, name: file.name, size: file.size, mtime: file.lastModified, ext: extensionOf(file.name) });
+        }
+      }
+      await visit(root, "");
+      return { files, truncated };
+    }
+
+    function filesFromInput(list) {
+      const all = [...(list || [])];
+      const truncated = all.length > SCAN_LIMIT;
+      const chosen = all.slice(0, SCAN_LIMIT);
+      const first = (chosen[0] && (chosen[0].webkitRelativePath || chosen[0].name)) || "папка";
+      const folder = first.split(/[\\/]/)[0] || "папка";
+      const files = chosen.map((file) => {
+        const relative = file.webkitRelativePath || file.name;
+        const parts = relative.split(/[\\/]/).filter(Boolean);
+        if (parts[0] === folder) parts.shift();
+        return { path: parts.join("/") || file.name, name: file.name, size: file.size, mtime: file.lastModified, ext: extensionOf(file.name) };
+      });
+      return { folder, files, truncated };
+    }
+
+    async function copyHandleTree(source, dest) {
+      let copied = 0;
+      async function visit(from, to) {
+        for await (const entry of from.values()) {
+          if (entry.kind === "directory") {
+            if (shouldSkipDir(entry.name)) continue;
+            const child = await to.getDirectoryHandle(entry.name, { create: true });
+            await visit(entry, child);
+            continue;
+          }
+          const file = await entry.getFile();
+          const out = await to.getFileHandle(entry.name, { create: true });
+          const writable = await out.createWritable();
+          await writable.write(file);
+          await writable.close();
+          copied += 1;
+        }
+      }
+      await visit(source, dest);
+      return copied;
+    }
+
+    async function fileExists(root, relative) {
+      const parts = relative.split("/").filter(Boolean);
+      let dir = root;
+      for (let i = 0; i < parts.length; i++) {
+        const name = parts[i];
+        const last = i === parts.length - 1;
+        try {
+          if (last) { await dir.getFileHandle(name); return true; }
+          dir = await dir.getDirectoryHandle(name);
+        } catch { return false; }
+      }
+      return false;
+    }
+
+    async function applyTidyMoves(root, moves) {
+      const skipped = [];
+      let done = 0;
+      for (const move of moves) {
+        try {
+          const source = await root.getFileHandle(move.from);
+          if (await fileExists(root, move.to)) { skipped.push(move.from); continue; }
+          const folder = await root.getDirectoryHandle(move.folder, { create: true });
+          const file = await source.getFile();
+          const out = await folder.getFileHandle(move.from, { create: true });
+          const writable = await out.createWritable();
+          await writable.write(file);
+          await writable.close();
+          await root.removeEntry(move.from);
+          done += 1;
+        } catch { skipped.push(move.from); }
+      }
+      return { done, skipped };
+    }
+
+    const stageEl = document.getElementById("work-stage");
+    const dirInput = document.getElementById("work-dir");
+    let pendingJob = "report";
+    let planState = null;
+    let backupState = null;
+
+    function setStage(html) { stageEl.innerHTML = html; }
+
+    function quoteLines(lines) {
+      return "<blockquote>" + lines.map((l) => "<p>" + escapeHtml(l) + "</p>").join("") + "</blockquote>";
+    }
+    function escapeHtml(s) {
+      return s.replace(/[&<>"]/g, (c) => ({ "&": "&", "<": "<", ">": ">", '"': """ }[c]));
+    }
+
+    function consentBlock(idBtn, label) {
+      return (
+        '<div class="field" style="margin-top:2rem;">' +
+          '<label class="lede" for="consent">Напишите «согласен», если план ваш</label>' +
+          '<p class="small muted">Ночь на размышление — это нормально. Спешки нет.</p>' +
+          '<input id="consent" type="text" autocomplete="off" />' +
+        "</div>" +
+        '<div class="field"><button type="button" class="letter-copy" id="' + idBtn + '" disabled>' + label + "</button>" +
+        '<p class="small muted" id="consent-note"></p></div>'
+      );
+    }
+
+    function bindConsent(idBtn, onRun) {
+      const input = document.getElementById("consent");
+      const btn = document.getElementById(idBtn);
+      input.addEventListener("input", () => { btn.disabled = !isConsent(input.value); });
+      btn.addEventListener("click", onRun);
+    }
+
+    async function start(job) {
+      pendingJob = job;
+      planState = null;
+      backupState = null;
+      if (job === "copy") return startBackup();
+      if (canWriteFolders()) {
+        try {
+          const handle = await window.showDirectoryPicker({ mode: job === "tidy" ? "readwrite" : "read" });
+          setStage("<p class='muted'>Смотрю папку. Никуда её не отправляю.</p>");
+          const { files, truncated } = await walkHandle(handle);
+          finishScan(job, handle.name, files, truncated, handle);
+        } catch (e) {
+          if (e && e.name === "AbortError") return;
+          dirInput.click();
+        }
+        return;
+      }
+      dirInput.click();
+    }
+
+    dirInput.addEventListener("change", () => {
+      const { folder, files, truncated } = filesFromInput(dirInput.files);
+      dirInput.value = "";
+      if (!files.length) return;
+      finishScan(pendingJob, folder, files, truncated, null);
+    });
+
+    function finishScan(job, folder, files, truncated, handle) {
+      const refusal = refuseScan(folder, files);
+      if (refusal) {
+        setStage("<p>" + escapeHtml(refusal) + "</p>");
+        return;
+      }
+      if (job === "report") {
+        setStage("<p class='kicker'>отчёт · " + escapeHtml(folder) + "</p>" + quoteLines(composeReport(folder, files, truncated)) + "<p class='small muted'>Ничего не удалено. Это только список.</p>");
+        return;
+      }
+      const plan = composeTidyPlan(files);
+      planState = { folder, moves: plan.moves, handle };
+      let extra = "";
+      if (plan.moves.length) {
+        extra = "<ul class='work-list'>" + plan.moves.slice(0, 12).map((m) => "<li>" + escapeHtml(m.from) + " → " + escapeHtml(m.to) + "</li>").join("") +
+          (plan.moves.length > 12 ? "<li class='muted'>и ещё " + (plan.moves.length - 12) + "</li>" : "") + "</ul>";
+      }
+      setStage("<p class='kicker'>план · " + escapeHtml(folder) + "</p>" + quoteLines(plan.lines) + extra + consentBlock("run-plan", "Выполнить план"));
+      bindConsent("run-plan", runPlan);
+    }
+
+    async function startBackup() {
+      if (!canWriteFolders()) {
+        setStage("<p>Запасную копию эта страница делает в Chrome или Edge на компьютере. Выберите две папки: откуда и куда.</p>");
+        return;
+      }
+      try {
+        const source = await window.showDirectoryPicker({ mode: "read" });
+        const dest = await window.showDirectoryPicker({ mode: "readwrite" });
+        if (source.name === dest.name) {
+          setStage("<p>Источник и место копии совпали. Выберите другую папку, куда копировать.</p>");
+          return;
+        }
+        setStage("<p class='muted'>Считаю, что копировать.</p>");
+        const { files, truncated } = await walkHandle(source);
+        const refusal = refuseScan(source.name, files);
+        if (refusal) { setStage("<p>" + escapeHtml(refusal) + "</p>"); return; }
+        backupState = { source, dest };
+        const extra = truncated ? " Список неполный, но копия пойдёт по всей папке." : "";
+        setStage(
+          "<p class='kicker'>копия</p>" +
+          quoteLines(["Откуда: «" + source.name + "». Куда: «" + dest.name + "».", "В источнике файлы останутся." + extra]) +
+          consentBlock("run-copy", "Копировать")
+        );
+        bindConsent("run-copy", runBackup);
+      } catch (e) {
+        if (e && e.name === "AbortError") return;
+        setStage("<p>Не удалось выбрать папки.</p>");
+      }
+    }
+
+    async function runPlan() {
+      const input = document.getElementById("consent");
+      if (!planState || !isConsent(input.value)) {
+        document.getElementById("consent-note").textContent = "Нужны ясные слова «согласен». Пока их нет — файлы на месте.";
+        return;
+      }
+      if (!planState.handle) {
+        setStage("<p>План готов. Раскладывать файлы эта страница может в Chrome или Edge на компьютере. Откройте страницу, выберите ту же папку и напишите «согласен».</p>");
+        return;
+      }
+      if (!planState.moves.length) {
+        setStage("<p>Двигать нечего. Можно оставить как есть.</p>");
+        return;
+      }
+      setStage("<p class='muted'>Раскладываю по плану. Ничего не удаляю.</p>");
+      const result = await applyTidyMoves(planState.handle, planState.moves);
+      const lines = ["Готово. Перенёс " + result.done + ", как в плане.", "Исходные файлы из корня папки ушли в названные папки. Удаления не было."];
+      if (result.skipped.length) lines.push("Не тронул (уже есть или не открылось): " + result.skipped.slice(0, 3).join(", ") + ".");
+      setStage(quoteLines(lines));
+    }
+
+    async function runBackup() {
+      const input = document.getElementById("consent");
+      if (!backupState || !isConsent(input.value)) {
+        document.getElementById("consent-note").textContent = "Нужны ясные слова «согласен». Пока их нет — ничего не копирую.";
+        return;
+      }
+      setStage("<p class='muted'>Копирую в «" + escapeHtml(backupState.dest.name) + "». Источник не трогаю.</p>");
+      try {
+        const copied = await copyHandleTree(backupState.source, backupState.dest);
+        setStage(quoteLines([
+          "Скопировано " + copied + " файлов в «" + backupState.dest.name + "».",
+          "Откуда: «" + backupState.source.name + "». Там всё как было."
+        ]));
+      } catch {
+        setStage("<p>Копия оборвалась. Источник не трогал.</p>");
+      }
+    }
+
+    document.getElementById("work-report").addEventListener("click", () => start("report"));
+    document.getElementById("work-tidy").addEventListener("click", () => start("tidy"));
+    document.getElementById("work-copy").addEventListener("click", () => start("copy"));
   </script>
 </body>
 </html>
