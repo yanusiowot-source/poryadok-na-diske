@@ -119,6 +119,8 @@ kind_of() {
     mp4|mkv|avi|mov|wmv|webm) printf 'video' ;;
     mp3|wav|flac|aac|ogg|m4a) printf 'audio' ;;
     pst|ost|eml|msg|mbox) printf 'mail' ;;
+    lnk|url) printf 'shortcut' ;;
+    bat|cmd|ps1) printf 'tool' ;;
     *) printf 'other' ;;
   esac
 }
@@ -132,6 +134,44 @@ kind_folder() {
     video) printf 'Видео' ;;
     audio) printf 'Музыка' ;;
   esac
+}
+
+pretty_name() {
+  local n="${1##*/}"
+  n="${n%.lnk}"; n="${n%.LNK}"
+  n="${n%.url}"; n="${n%.URL}"
+  n="${n%.bat}"; n="${n%.BAT}"
+  n="${n%.cmd}"; n="${n%.CMD}"
+  n="${n%.ps1}"
+  printf '%s' "$n"
+}
+
+is_noise_name() {
+  local n="${1##*/}"
+  case "$n" in
+    desktop.ini|Desktop.ini|Thumbs.db|thumbs.db|.DS_Store) return 0 ;;
+  esac
+  return 1
+}
+
+join_names() {
+  local -a items=("$@")
+  local i n="${#items[@]}"
+  if (( n == 0 )); then return 0; fi
+  if (( n == 1 )); then printf '%s' "${items[0]}"; return 0; fi
+  for (( i = 0; i < n; i++ )); do
+    if (( i == 0 )); then printf '%s' "${items[i]}"
+    elif (( i == n - 1 )); then printf ' и %s' "${items[i]}"
+    else printf ', %s' "${items[i]}"
+    fi
+  done
+}
+
+tidy_folder_name() {
+  case "$1" in
+    Установщики|Картинки|Документы|Архивы|Видео|Музыка) return 0 ;;
+  esac
+  return 1
 }
 
 list_files() {
@@ -294,16 +334,23 @@ cmd_plan() {
       printf '%s\n' "«${title}» не беру."
       return 0
     fi
-    local file kind folder dest count=0 left=0 skip=0
+    local file kind folder dest count=0 left=0 skip=0 bench=0
     printf '\n%s\n' "$title"
     printf 'ROOT=%s\n' "$dir" >> "$PLAN"
     local files="$RABOTA/.top.$$"
     top_level_files "$dir" > "$files"
     while IFS= read -r file; do
       [[ -n "$file" ]] || continue
+      if is_noise_name "$file"; then
+        continue
+      fi
       kind="$(kind_of "$file")"
       if [[ "$kind" == mail ]]; then
         skip=$((skip + 1))
+        continue
+      fi
+      if [[ "$kind" == shortcut || "$kind" == tool ]]; then
+        bench=$((bench + 1))
         continue
       fi
       if [[ "$kind" == other ]]; then
@@ -326,6 +373,9 @@ cmd_plan() {
     fi
     if (( left > 0 )); then
       printf 'Неясных оставляю: %s.\n' "$left"
+    fi
+    if (( bench > 0 )); then
+      printf 'Верстак оставляю: %s.\n' "$bench"
     fi
     if (( skip > 0 )); then
       printf '%s\n' "Письма не трогаю."
@@ -441,12 +491,113 @@ cmd_soglasen() {
   mv "$PLAN" "$RABOTA/plan.sdelano.txt"
 }
 
+cmd_idilliya() {
+  local ds dl out="$RABOTA/idilliya.txt"
+  ds="$(desktop_dir || true)"
+  dl="$(downloads_dir || true)"
+
+  {
+    printf '%s\n\n' "Вечер."
+    printf '%s\n\n' "С чувством, с толком, с расстановкой."
+
+    if [[ -n "${ds:-}" ]]; then
+      idyll_desktop "$ds"
+      printf '\n'
+    fi
+    if [[ -n "${dl:-}" ]]; then
+      idyll_downloads "$dl"
+      printf '\n'
+    fi
+
+    printf '%s\n\n' "Спешки нет. Файлы на месте."
+    printf '%s\n' "Ночь на размышление — это нормально."
+  } > "$out"
+  cat "$out"
+  printf '\n%s\n' "Записано: $out"
+}
+
+idyll_desktop() {
+  local dir="$1"
+  local file kind
+  local -a shorts=() tools=() other=()
+  local list="$RABOTA/.desk.$$"
+  top_level_files "$dir" > "$list"
+  while IFS= read -r file; do
+    [[ -n "$file" ]] || continue
+    if is_noise_name "$file"; then continue; fi
+    kind="$(kind_of "$file")"
+    case "$kind" in
+      shortcut) shorts+=("$(pretty_name "$file")") ;;
+      tool) tools+=("$(pretty_name "$file")") ;;
+      *) other+=("${file##*/}") ;;
+    esac
+  done < "$list"
+  rm -f "$list"
+
+  printf '%s\n\n' "Рабочий стол — верстак."
+  if ((${#shorts[@]} > 0)); then
+    printf 'Ярлыки: %s.\n\n' "$(join_names "${shorts[@]}")"
+  fi
+  if ((${#tools[@]} > 0)); then
+    printf 'Инструменты: %s.\n\n' "$(join_names "${tools[@]}")"
+  fi
+  if ((${#other[@]} > 0)); then
+    printf 'Ещё наверху: %s.\n\n' "$(join_names "${other[@]}")"
+  fi
+  if ((${#shorts[@]} == 0 && ${#tools[@]} == 0 && ${#other[@]} == 0)); then
+    printf '%s\n\n' "Пусто и тихо."
+  fi
+  printf '%s\n' "Это не разбирать. Это ваше место работы."
+}
+
+idyll_downloads() {
+  local dir="$1"
+  local file rel kind top=0 nested=0 total=0
+  local -a tidy_present=()
+  local -A tidy_count=()
+  local list="$RABOTA/.dl.$$"
+  list_files "$dir" > "$list"
+  while IFS= read -r file; do
+    [[ -n "$file" ]] || continue
+    total=$((total + $(file_size "$file")))
+    rel="${file#"$dir"/}"
+    if [[ "$rel" != */* ]]; then
+      top=$((top + 1))
+      continue
+    fi
+    nested=$((nested + 1))
+    local folder="${rel%%/*}"
+    if tidy_folder_name "$folder"; then
+      tidy_count["$folder"]=$(( ${tidy_count[$folder]:-0} + 1 ))
+    fi
+  done < "$list"
+  rm -f "$list"
+
+  printf '%s\n\n' "Загрузки — $(format_size "$total")."
+  if (( top > 0 )); then
+    printf 'В корне %s %s россыпью.\n\n' "$top" "$(plural "$top" "файл" "файла" "файлов")"
+  else
+    printf '%s\n\n' "В корне пусто. Хорошо."
+  fi
+
+  local name
+  for name in Установщики Архивы Документы Картинки Видео Музыка; do
+    if (( ${tidy_count[$name]:-0} > 0 )); then
+      printf 'В «%s» — %s.\n' "$name" "${tidy_count[$name]}"
+    fi
+  done
+  if ((${#tidy_count[@]} > 0)); then
+    printf '\n%s\n' "Это уже разобранное. Лежит на месте."
+  fi
+}
+
 cmd_pomoshch() {
   cat << 'EOF'
 Порядок на диске. На этом компьютере. В сеть ничего не уходит.
 
   bash poryadok.sh otchet     отчёт о «Загрузках» и «Рабочем столе»
-  bash poryadok.sh plan       план разбора. Файлы ещё на месте
+  bash poryadok.sh idilliya   вечерняя картина. ничего не трогает
+  bash poryadok.sh plan       план разбора. файлы ещё на месте
   bash poryadok.sh soglasen   выполнить план или копию
   bash poryadok.sh kopiya     запасная копия «Загрузок»
   bash poryadok.sh kopiya ПАПКА КУДА
@@ -461,6 +612,7 @@ main() {
   shift || true
   case "$cmd" in
     otchet|отчет|отчёт) cmd_otchet "$@" ;;
+    idilliya|idyll|идиллия) cmd_idilliya "$@" ;;
     plan|план) cmd_plan "$@" ;;
     kopiya|копия) cmd_kopiya "$@" ;;
     soglasen|согласен) cmd_soglasen "$@" ;;
