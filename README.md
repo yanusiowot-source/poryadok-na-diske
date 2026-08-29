@@ -1,16 +1,15 @@
 # Порядок на диске
 
-Вечерняя услуга. Одна спокойная страница. Форма ничего не отправляет — только собирает письмо.
+Вечерняя услуга. Одна спокойная страница.
 
-## На компьютере, из Git Bash
+Живой адрес (не превью):
 
-Сначала зайдите домой. Не оставайтесь в `/` — туда Git писать не может.
+https://yanusiowot-source.github.io/
+
+На компьютере, из Git Bash:
 
 ```bash
 cd ~
-git clone https://github.com/yanusiowot-source/poryadok-na-diske.git
 cd poryadok-na-diske
-start index.html
+cmd //c start "" "$(pwd -W)/index.html"
 ```
-
-Страница откроется в обычном браузере. Node не нужен.
