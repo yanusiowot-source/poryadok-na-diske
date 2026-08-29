@@ -2,22 +2,15 @@
 
 Вечерняя услуга. Одна спокойная страница. Форма ничего не отправляет — только собирает письмо.
 
-## Git Bash на Windows
+## На компьютере, из Git Bash
 
-Окно должно показывать путь вроде `/c/Users/hp`, не просто `/`.
-Если видите `MINGW64 /` — сначала зайдите домой.
+Сначала зайдите домой. Не оставайтесь в `/` — туда Git писать не может.
 
 ```bash
 cd ~
 git clone https://github.com/yanusiowot-source/poryadok-na-diske.git
 cd poryadok-na-diske
-explorer index.html
+start index.html
 ```
 
-`explorer` откроет страницу в браузере.
-
-## Без Git
-
-Скачайте архив, распакуйте, откройте `index.html`:
-
-https://github.com/yanusiowot-source/poryadok-na-diske/archive/refs/heads/main.zip
+Страница откроется в обычном браузере. Node не нужен.
