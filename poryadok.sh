@@ -591,12 +591,174 @@ idyll_downloads() {
   fi
 }
 
+json_escape() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+sky_kind_constellation() {
+  local file="$1" folder="$2"
+  local kind
+  kind="$(kind_of "$file")"
+  case "$kind" in
+    shortcut|tool) printf 'Верстак' ;;
+    installer) printf 'Установщики' ;;
+    archive) printf 'Архивы' ;;
+    document) printf 'Документы' ;;
+    image) printf 'Картинки' ;;
+    video) printf 'Видео' ;;
+    audio) printf 'Музыка' ;;
+    *)
+      if tidy_folder_name "$folder"; then printf '%s' "$folder"
+      else printf 'Россыпь'
+      fi
+      ;;
+  esac
+}
+
+collect_sky_js() {
+  local ds dl file rel folder name kind sz cons list
+  ds="$(desktop_dir || true)"
+  dl="$(downloads_dir || true)"
+  printf 'const SKY = [\n'
+  if [[ -n "${ds:-}" ]]; then
+    list="$RABOTA/.skydesk.$$"
+    top_level_files "$ds" > "$list"
+    while IFS= read -r file; do
+      [[ -n "$file" ]] || continue
+      if is_noise_name "$file"; then continue; fi
+      name="$(pretty_name "$file")"
+      kind="$(kind_of "$file")"
+      sz="$(file_size "$file")"
+      cons="$(sky_kind_constellation "$file" "")"
+      printf '  {name:"%s",kind:"%s",size:%s,constellation:"%s"},\n' \
+        "$(json_escape "$name")" "$kind" "$sz" "$(json_escape "$cons")"
+    done < "$list"
+    rm -f "$list"
+  fi
+  if [[ -n "${dl:-}" ]]; then
+    list="$RABOTA/.skydl.$$"
+    list_files "$dl" > "$list"
+    while IFS= read -r file; do
+      [[ -n "$file" ]] || continue
+      rel="${file#"$dl"/}"
+      folder=""
+      [[ "$rel" == */* ]] && folder="${rel%%/*}"
+      name="$(pretty_name "$file")"
+      kind="$(kind_of "$file")"
+      sz="$(file_size "$file")"
+      if [[ -n "$folder" ]] && tidy_folder_name "$folder"; then
+        cons="$folder"
+      else
+        cons="$(sky_kind_constellation "$file" "$folder")"
+      fi
+      printf '  {name:"%s",kind:"%s",size:%s,constellation:"%s"},\n' \
+        "$(json_escape "$name")" "$kind" "$sz" "$(json_escape "$cons")"
+    done < "$list"
+    rm -f "$list"
+  fi
+  printf '];\n'
+}
+
+cmd_chudo() {
+  local out="$RABOTA/chudo.html" sky="$RABOTA/sky.js"
+  collect_sky_js > "$sky"
+  cat > "$out" << 'HTML'
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ночная карта — Порядок на диске</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,400&family=Literata:opsz,wght@7..72,400;7..72,500&display=swap" />
+<style>
+  :root { --paper:#f4f0e8; --sheet:#ebe5d9; --ink:#241f18; --muted:#5a534a; --rule:#cfc6b8; --gilt:#8a6a3a; }
+  html,body { margin:0; background:var(--paper); color:var(--ink); font-family:Literata,serif; }
+  main { max-width:52rem; margin:0 auto; padding:3.5rem 1.5rem 5rem; }
+  .kicker { font-family:"Cormorant Garamond",serif; letter-spacing:.14em; text-transform:lowercase; font-variant-caps:small-caps; color:var(--muted); font-size:.95rem; }
+  h1 { font-family:"Cormorant Garamond",serif; font-weight:500; font-size:clamp(2.2rem,5vw,3.2rem); line-height:1.15; margin:1.5rem 0 0; }
+  p { line-height:1.65; }
+  .sheet { background:var(--sheet); box-shadow:0 8px 24px -12px rgba(36,31,24,.12); border-radius:.25rem; overflow:hidden; margin:2rem 0; }
+  svg { display:block; width:100%; height:auto; }
+  .muted { color:var(--muted); font-size:.95rem; }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">обсерватория</p>
+  <h1>Ночная карта</h1>
+  <p>Папки — созвездия. Файлы — звёзды. Ничего не удалено.</p>
+  <div class="sheet"><svg id="atlas" viewBox="0 0 800 520" role="img" aria-label="Карта диска"></svg></div>
+  <p class="muted">Спешки нет. Это ваш диск сегодня вечером.</p>
+</main>
+<script>
+HTML
+  cat "$sky" >> "$out"
+  cat >> "$out" << 'HTML'
+function hash(s){let h=2166136261;for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);return (h>>>0)/4294967296;}
+function layout(stars,w,h){
+  const names=[...new Set(stars.map(s=>s.constellation))];
+  const cx=w/2,cy=h/2,orbit=Math.min(w,h)*0.32;
+  return stars.map(star=>{
+    const i=Math.max(0,names.indexOf(star.constellation));
+    const base=(i/Math.max(names.length,1))*Math.PI*2-Math.PI/2;
+    const ox=cx+Math.cos(base)*orbit, oy=cy+Math.sin(base)*orbit;
+    const jitter=28+hash(star.name)*54;
+    const a=hash(star.name+star.constellation)*Math.PI*2;
+    return {...star,x:ox+Math.cos(a)*jitter,y:oy+Math.sin(a)*jitter*0.72,r:2.2+Math.log10(Math.max(star.size,10))*1.15};
+  });
+}
+const svg=document.getElementById("atlas");
+const NS="http://www.w3.org/2000/svg";
+function el(n,a){const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;}
+svg.appendChild(el("rect",{width:800,height:520,fill:"#ebe5d9"}));
+[0.18,0.32,0.46].forEach(t=>svg.appendChild(el("circle",{cx:400,cy:260,r:Math.min(800,520)*t,fill:"none",stroke:"#cfc6b8","stroke-width":"0.6"})));
+const laid=layout(SKY,800,520);
+const by={};
+laid.forEach(s=>{(by[s.constellation]=by[s.constellation]||[]).push(s);});
+Object.values(by).forEach(list=>{
+  list.sort((a,b)=>a.x-b.x);
+  for(let i=0;i<list.length-1;i++){
+    svg.appendChild(el("line",{x1:list[i].x,y1:list[i].y,x2:list[i+1].x,y2:list[i+1].y,stroke:"rgba(138,106,58,.5)","stroke-width":"0.8"}));
+  }
+});
+laid.forEach(s=>{
+  const c=el("circle",{cx:s.x,cy:s.y,r:s.r,fill:"#241f18"});
+  const t=document.createElementNS(NS,"title");
+  t.textContent=s.name+" · "+s.constellation;
+  c.appendChild(t);
+  svg.appendChild(c);
+});
+Object.entries(by).forEach(([name,list])=>{
+  const x=list.reduce((a,s)=>a+s.x,0)/list.length;
+  const y=list.reduce((a,s)=>a+s.y,0)/list.length;
+  const tx=el("text",{x,y:y-18,"text-anchor":"middle",fill:"#8a6a3a","font-family":"Cormorant Garamond, serif","font-size":"15","letter-spacing":"0.12em"});
+  tx.textContent=name.toLowerCase();
+  svg.appendChild(tx);
+});
+</script>
+</body>
+</html>
+HTML
+
+  printf '%s\n' "Ночная карта готова."
+  printf '%s\n' "$out"
+  if command -v cygpath >/dev/null 2>&1; then
+    cmd //c start "" "$(cygpath -w "$out")"
+  elif command -v cmd >/dev/null 2>&1; then
+    cmd //c start "" "$out"
+  else
+    xdg-open "$out" >/dev/null 2>&1 || true
+  fi
+}
+
 cmd_pomoshch() {
   cat << 'EOF'
 Порядок на диске. На этом компьютере. В сеть ничего не уходит.
 
   bash poryadok.sh otchet     отчёт о «Загрузках» и «Рабочем столе»
   bash poryadok.sh idilliya   вечерняя картина. ничего не трогает
+  bash poryadok.sh chudo      ночная карта диска. открывает в браузере
   bash poryadok.sh plan       план разбора. файлы ещё на месте
   bash poryadok.sh soglasen   выполнить план или копию
   bash poryadok.sh kopiya     запасная копия «Загрузок»
@@ -613,6 +775,7 @@ main() {
   case "$cmd" in
     otchet|отчет|отчёт) cmd_otchet "$@" ;;
     idilliya|idyll|идиллия) cmd_idilliya "$@" ;;
+    chudo|чудо|atlas) cmd_chudo "$@" ;;
     plan|план) cmd_plan "$@" ;;
     kopiya|копия) cmd_kopiya "$@" ;;
     soglasen|согласен) cmd_soglasen "$@" ;;
