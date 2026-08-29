@@ -757,7 +757,7 @@ cmd_chudo() {
   <p class="lead">Сегодня вечером.</p>
   <div class="sheet">
     <svg id="atlas" viewBox="0 0 800 560" role="img" aria-label="Ночная карта диска"></svg>
-    <p id="caption">наведите — имя звезды</p>
+    <p id="caption">·</p>
   </div>
   <div id="idyll"></div>
   <p class="muted">Спешки нет. Это ваш диск.</p>
@@ -864,7 +864,7 @@ function paint(){
     g.addEventListener("mouseenter",()=>{cap.textContent=s.name+" · "+s.constellation.toLowerCase();});
     svg.appendChild(g);
   });
-  svg.addEventListener("mouseleave",()=>{cap.textContent="наведите — имя звезды";});
+  svg.addEventListener("mouseleave",()=>{cap.textContent="·";});
   laid.labels.forEach(l=>{
     const tx=el("text",{x:l.x,y:l.y,"text-anchor":"middle",fill:gilt,"font-family":"Palatino, Georgia, serif","font-size":"13","letter-spacing":"0.22em"});
     tx.textContent=l.name.toLowerCase();
